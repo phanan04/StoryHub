@@ -8,14 +8,20 @@ import { MangaAPI } from "@/lib/api";
 import { useStore } from "@/store/useStore";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
+// "trending" is the default/discover state — hero is shown
+const DEFAULT_CATEGORY = "trending";
+
 export default function HomePage() {
   const { activeCategory, setActiveCategory } = useStore();
   const [page, setPage] = useState(1);
 
+  // Hero is only visible when on the default/discover state
+  const isHeroVisible = activeCategory === DEFAULT_CATEGORY;
+
   const { data, isLoading } = useQuery({
     queryKey: ["manga", activeCategory, page],
     queryFn: () => {
-      if (activeCategory === "trending") return MangaAPI.getTrending();
+      if (activeCategory === DEFAULT_CATEGORY) return MangaAPI.getTrending();
       return MangaAPI.getByCategory(activeCategory, page);
     },
   });
@@ -23,54 +29,71 @@ export default function HomePage() {
   const mangas = data?.data ?? [];
   const hasNext = data?.pagination?.has_next_page ?? false;
 
+  const handleCategoryChange = (id: string) => {
+    setActiveCategory(id);
+    setPage(1);
+    // Scroll to top smoothly so the category bar is in view
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <>
-      {/* Hero — Dribbble inspired */}
-      <section className="bg-white border-b border-gray-200">
-        <div className="max-w-[1400px] mx-auto px-6 py-16 text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-[#0d0c22] leading-tight max-w-3xl mx-auto">
-            Discover the World’s Best{" "}
-            <span className="text-[#ea4c89]">Manga &amp; Manhwa</span>
-          </h1>
-          <p className="mt-5 text-lg text-[#6e6d7a] max-w-xl mx-auto">
-            Explore thousands of stories from the most talented manga artists.
-            Find your next favourite series.
-          </p>
-          <div className="mt-8 flex items-center justify-center gap-3 flex-wrap">
-            {["⚔️ Action", "💕 Romance", "🔥 Trending", "👻 Horror", "😂 Comedy"].map((tag) => (
-              <button
-                key={tag}
-                onClick={() => {
-                  const id = tag.split(" ")[1].toLowerCase();
-                  setActiveCategory(id);
-                  setPage(1);
-                  window.scrollTo({ top: 200, behavior: "smooth" });
-                }}
-                className="px-4 py-2 rounded-full border border-gray-200 text-sm font-medium text-[#6e6d7a] hover:border-[#ea4c89] hover:text-[#ea4c89] transition bg-white"
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
+      {/* ── Hero Section ── only shown in Discover / default state ── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateRows: isHeroVisible ? "1fr" : "0fr",
+          transition: "grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ overflow: "hidden", minHeight: 0 }}>
+          <section className="bg-white border-b border-gray-200">
+            <div className="max-w-[1400px] mx-auto px-6 py-16 text-center">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-[#0d0c22] leading-tight max-w-3xl mx-auto">
+                Discover the World's Best{" "}
+                <span className="text-[#ea4c89]">Manga &amp; Manhwa</span>
+              </h1>
+              <p className="mt-5 text-lg text-[#6e6d7a] max-w-xl mx-auto">
+                Explore thousands of stories from the most talented manga artists.
+                Find your next favourite series.
+              </p>
+              {/* Quick-filter pills */}
+              <div className="mt-8 flex items-center justify-center gap-3 flex-wrap">
+                {[
+                  { emoji: "⚔️", label: "Action", id: "action" },
+                  { emoji: "💕", label: "Romance", id: "romance" },
+                  { emoji: "🔥", label: "Trending", id: "trending" },
+                  { emoji: "👻", label: "Horror", id: "horror" },
+                  { emoji: "😂", label: "Comedy", id: "comedy" },
+                ].map((tag) => (
+                  <button
+                    key={tag.id}
+                    onClick={() => handleCategoryChange(tag.id)}
+                    className="px-4 py-2 rounded-full border border-gray-200 text-sm font-medium text-[#6e6d7a] hover:border-[#ea4c89] hover:text-[#ea4c89] transition bg-white"
+                  >
+                    {tag.emoji} {tag.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
         </div>
-      </section>
+      </div>
 
-      {/* Category Tabs */}
+      {/* ── Category Tabs — sticky below Navbar ── */}
       <CategoryTabs
         active={activeCategory}
-        onChange={(id) => {
-          setActiveCategory(id);
-          setPage(1);
-        }}
+        onChange={handleCategoryChange}
       />
 
-      {/* Grid */}
+      {/* ── Main Content Grid ── */}
       <div className="max-w-[1400px] mx-auto px-6 py-10">
         {/* Section header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h2 className="text-2xl font-extrabold text-[#0d0c22] capitalize">
-              {activeCategory === "trending" ? "🔥 Trending Now" : activeCategory}
+              {activeCategory === DEFAULT_CATEGORY ? "🔥 Trending Now" : activeCategory}
             </h2>
             <p className="text-sm text-[#6e6d7a] mt-0.5">
               {mangas.length > 0 ? `${mangas.length} titles` : ""}
@@ -80,7 +103,7 @@ export default function HomePage() {
 
         <MangaGrid mangas={mangas} isLoading={isLoading} />
 
-        {/* Pagination — Dribbble style */}
+        {/* Pagination */}
         {!isLoading && mangas.length > 0 && (
           <div className="flex items-center justify-center gap-2 mt-14">
             <button
