@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: storyhub-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npx tsc
+    startCommand: node dist/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: CORS_ORIGIN
+        sync: false   # set manually in Render dashboard
+    autoDeploy: true
