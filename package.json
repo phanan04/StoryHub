@@ -2,7 +2,7 @@
   "name": "storyhub-backend",
   "version": "1.0.0",
   "scripts": {
-    "build": "cd backend && npm install && npx tsc",
+    "build": "cd backend && npm install && ./node_modules/.bin/tsc",
     "start": "node backend/dist/server.js"
   }
 }
