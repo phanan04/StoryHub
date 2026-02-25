@@ -1,78 +1,134 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useCallback } from "react";
 import MangaGrid from "@/components/manga/MangaGrid";
 import CategoryTabs from "@/components/ui/CategoryTabs";
 import { MangaAPI } from "@/lib/api";
 import { useStore } from "@/store/useStore";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { Manga } from "@/types/manga.types";
 
-// "trending" is the default/discover state — hero is shown
 const DEFAULT_CATEGORY = "trending";
 
 export default function HomePage() {
   const { activeCategory, setActiveCategory } = useStore();
-  const [page, setPage] = useState(1);
-
-  // Hero is only visible when on the default/discover state
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const isHeroVisible = activeCategory === DEFAULT_CATEGORY;
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["manga", activeCategory, page],
-    queryFn: () => {
-      if (activeCategory === DEFAULT_CATEGORY) return MangaAPI.getTrending();
-      return MangaAPI.getByCategory(activeCategory, page);
-    },
-  });
+  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
+    useInfiniteQuery({
+      queryKey: ["manga", activeCategory],
+      queryFn: ({ pageParam = 1 }) => {
+        if (activeCategory === DEFAULT_CATEGORY) return MangaAPI.getTrending();
+        return MangaAPI.getByCategory(activeCategory, pageParam as number);
+      },
+      initialPageParam: 1,
+      getNextPageParam: (lastPage, allPages) => {
+        if (activeCategory === DEFAULT_CATEGORY) return undefined;
+        return lastPage?.pagination?.has_next_page ? allPages.length + 1 : undefined;
+      },
+    });
 
-  const mangas = data?.data ?? [];
-  const hasNext = data?.pagination?.has_next_page ?? false;
+  const mangas: Manga[] = data?.pages.flatMap((p) => p?.data ?? []) ?? [];
+
+  const handleIntersect = useCallback(
+    (entries: IntersectionObserverEntry[]) => {
+      const [entry] = entries;
+      if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage();
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage]
+  );
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(handleIntersect, {
+      root: null,
+      rootMargin: "200px",
+      threshold: 0,
+    });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [handleIntersect]);
 
   const handleCategoryChange = (id: string) => {
     setActiveCategory(id);
-    setPage(1);
-    // Scroll to top smoothly so the category bar is in view
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
     <>
-      {/* ── Hero Section ── only shown in Discover / default state ── */}
+      {/* ── Hero — Dribbble whitespace + typography ── */}
       <div
         style={{
           display: "grid",
           gridTemplateRows: isHeroVisible ? "1fr" : "0fr",
-          transition: "grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+          transition: "grid-template-rows 0.4s cubic-bezier(0.4,0,0.2,1)",
           overflow: "hidden",
         }}
       >
         <div style={{ overflow: "hidden", minHeight: 0 }}>
-          <section className="bg-white border-b border-gray-200">
-            <div className="max-w-[1400px] mx-auto px-6 py-16 text-center">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-[#0d0c22] leading-tight max-w-3xl mx-auto">
-                Discover the World's Best{" "}
-                <span className="text-[#ea4c89]">Manga &amp; Manhwa</span>
+          <section
+            className="border-b transition-colors duration-200"
+            style={{
+              background: "var(--surface)",
+              borderColor: "var(--border)",
+            }}
+          >
+            <div className="max-w-[1400px] mx-auto px-6 py-20 lg:py-28 text-center">
+              {/* Eyebrow */}
+              <div
+                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-6 border"
+                style={{
+                  color: "var(--accent)",
+                  borderColor: "var(--accent-muted)",
+                  background: "var(--accent-muted)",
+                }}
+              >
+                Trending this week
+              </div>
+
+              {/* Main headline */}
+              <h1
+                className="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-[1.08] max-w-3xl mx-auto"
+                style={{
+                  color: "var(--text-primary)",
+                  letterSpacing: "-0.03em",
+                }}
+              >
+                Discover the World&apos;s Best{" "}
+                <span style={{ color: "var(--accent)" }}>
+                  Manga &amp; Manhwa
+                </span>
               </h1>
-              <p className="mt-5 text-lg text-[#6e6d7a] max-w-xl mx-auto">
-                Explore thousands of stories from the most talented manga artists.
-                Find your next favourite series.
+
+              {/* Sub */}
+              <p
+                className="mt-6 text-lg max-w-lg mx-auto leading-relaxed"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Explore thousands of stories from the most talented manga
+                artists. Find your next favourite series.
               </p>
-              {/* Quick-filter pills */}
-              <div className="mt-8 flex items-center justify-center gap-3 flex-wrap">
+
+              {/* Quick-filter genre pills */}
+              <div className="mt-10 flex items-center justify-center gap-2.5 flex-wrap">
                 {[
-                  { emoji: "⚔️", label: "Action", id: "action" },
-                  { emoji: "💕", label: "Romance", id: "romance" },
-                  { emoji: "🔥", label: "Trending", id: "trending" },
-                  { emoji: "👻", label: "Horror", id: "horror" },
-                  { emoji: "😂", label: "Comedy", id: "comedy" },
+                  { label: "Action", id: "action" },
+                  { label: "Romance", id: "romance" },
+                  { label: "Trending", id: "trending" },
+                  { label: "Horror", id: "horror" },
+                  { label: "Comedy", id: "comedy" },
+                  { label: "Fantasy", id: "fantasy" },
+                  { label: "Shounen", id: "shounen" },
                 ].map((tag) => (
                   <button
                     key={tag.id}
                     onClick={() => handleCategoryChange(tag.id)}
-                    className="px-4 py-2 rounded-full border border-gray-200 text-sm font-medium text-[#6e6d7a] hover:border-[#ea4c89] hover:text-[#ea4c89] transition bg-white"
+                    className="btn btn-ghost h-9 text-sm"
                   >
-                    {tag.emoji} {tag.label}
+                    {tag.label}
                   </button>
                 ))}
               </div>
@@ -81,62 +137,60 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── Category Tabs — sticky below Navbar ── */}
-      <CategoryTabs
-        active={activeCategory}
-        onChange={handleCategoryChange}
-      />
+      {/* ── Category Tabs ── */}
+      <CategoryTabs active={activeCategory} onChange={handleCategoryChange} />
 
-      {/* ── Main Content Grid ── */}
-      <div className="max-w-[1400px] mx-auto px-6 py-10">
+      {/* ── Grid ── */}
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-10">
         {/* Section header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-baseline justify-between mb-7">
           <div>
-            <h2 className="text-2xl font-extrabold text-[#0d0c22] capitalize">
-              {activeCategory === DEFAULT_CATEGORY ? "🔥 Trending Now" : activeCategory}
+            <h2
+              className="text-xl font-extrabold capitalize"
+              style={{
+                color: "var(--text-primary)",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {activeCategory === DEFAULT_CATEGORY
+                ? "Trending Now"
+                : activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)}
             </h2>
-            <p className="text-sm text-[#6e6d7a] mt-0.5">
-              {mangas.length > 0 ? `${mangas.length} titles` : ""}
-            </p>
+            {mangas.length > 0 && (
+              <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+                {mangas.length} titles
+              </p>
+            )}
           </div>
         </div>
 
-        <MangaGrid mangas={mangas} isLoading={isLoading} />
+        <MangaGrid mangas={mangas} isLoading={isLoading} isFetchingMore={isFetchingNextPage} />
 
-        {/* Pagination */}
-        {!isLoading && mangas.length > 0 && (
-          <div className="flex items-center justify-center gap-2 mt-14">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-200 text-[#6e6d7a] hover:border-[#0d0c22] hover:text-[#0d0c22] disabled:opacity-30 transition"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
+        {/* IntersectionObserver sentinel */}
+        <div ref={sentinelRef} className="h-1 w-full" />
 
-            {[page - 1, page, page + 1]
-              .filter((p) => p > 0)
-              .map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPage(p)}
-                  className={`w-10 h-10 flex items-center justify-center rounded-full text-sm font-semibold transition border ${
-                    p === page
-                      ? "bg-[#0d0c22] text-white border-[#0d0c22]"
-                      : "border-gray-200 text-[#6e6d7a] hover:border-[#0d0c22] hover:text-[#0d0c22]"
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
+        {/* Loading more */}
+        {isFetchingNextPage && (
+          <div
+            className="flex items-center justify-center gap-2 py-10"
+            style={{ color: "var(--text-muted)" }}
+          >
+            <Loader2
+              className="w-4 h-4 animate-spin"
+              style={{ color: "var(--accent)" }}
+            />
+            <span className="text-sm font-medium">Loading more...</span>
+          </div>
+        )}
 
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={!hasNext}
-              className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-200 text-[#6e6d7a] hover:border-[#0d0c22] hover:text-[#0d0c22] disabled:opacity-30 transition"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
+        {/* End of list */}
+        {!hasNextPage && mangas.length > 0 && !isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="flex items-center gap-4" style={{ color: "var(--text-muted)" }}>
+              <div className="h-px w-20" style={{ background: "var(--border)" }} />
+              <span className="text-sm font-medium">You&apos;ve seen it all ✨</span>
+              <div className="h-px w-20" style={{ background: "var(--border)" }} />
+            </div>
           </div>
         )}
       </div>

@@ -6,6 +6,25 @@ const api = axios.create({
   timeout: 15000,
 });
 
+/* ─── Response interceptor: normalise errors ─── */
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    const status = error.response?.status;
+    const url = error.config?.url ?? "unknown";
+
+    if (status === 429) {
+      console.warn(`[StoryHub] Rate limited on ${url}. Retry after a moment.`);
+    } else if (status >= 500) {
+      console.error(`[StoryHub] Server error ${status} on ${url}`);
+    } else if (!status) {
+      console.error(`[StoryHub] Network error on ${url}:`, error.message);
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 export const MangaAPI = {
   getTrending: async (): Promise<JikanListResponse> => {
     const { data } = await api.get<ApiResponse<JikanListResponse>>("/manga/trending");
