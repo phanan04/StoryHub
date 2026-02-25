@@ -1,0 +1,8 @@
+{
+  "name": "storyhub-backend",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cd backend && npm install && npx tsc",
+    "start": "node backend/dist/server.js"
+  }
+}
